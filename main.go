@@ -27,6 +27,7 @@ func main() {
 
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: false,
+		ReadBufferSize:        8192,
 	})
 
 	handlers.SetupRoutes(app)

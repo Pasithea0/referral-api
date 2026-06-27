@@ -90,6 +90,11 @@
   .pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; }
   .pagination button:disabled { opacity: 0.4; cursor: default; }
   .pagination span { font-size: 0.8125rem; color: var(--muted); }
+  .filter-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+  .filter-header h2 { margin-bottom: 0; }
+  .btn-sm { padding: 0.35rem 0.9rem; font-size: 0.8125rem; }
+  .create-panel { border-top: 1px solid var(--border); padding-top: 1.25rem; margin-top: 1rem; }
+  .btn-row { display: flex; gap: 0.5rem; }
 </style>
 </head>
 <body>
@@ -112,24 +117,37 @@
     <div class="stat-card"><div class="stat-number" id="stat-redemptions">-</div><div class="stat-label">Redemptions</div></div>
   </div>
 
-  <div class="card">
-    <h2>Create Campaign</h2>
-    <div id="create-error" class="error hidden"></div>
-    <div id="create-success" class="success hidden"></div>
-    <label for="camp-slug">Slug</label>
-    <input type="text" id="camp-slug" placeholder="e.g. spring24">
-    <label for="camp-name">Name</label>
-    <input type="text" id="camp-name" placeholder="e.g. Spring 2024">
-    <label for="camp-url">Base URL</label>
-    <input type="text" id="camp-url" placeholder="e.g. https://theintrodb.org/sign-up">
-    <label for="camp-desc">Description</label>
-    <textarea id="camp-desc" placeholder="Optional description for the campaign page"></textarea>
-    <button id="create-btn">Create Campaign</button>
-  </div>
-
-  <div class="card">
-    <h2>Campaigns</h2>
-    <div id="campaign-list"></div>
+  <div class="card" id="filter-card">
+    <div class="filter-header">
+      <h2>Campaign</h2>
+      <button id="new-campaign-btn" class="btn-sm">+ New Campaign</button>
+    </div>
+    <select id="campaign-select" style="width:100%;padding:0.5rem;font-family:inherit;font-size:0.875rem;border:1px solid var(--border);background:var(--bg);color:var(--fg);margin-bottom:0;">
+      <option value="">All Campaigns</option>
+    </select>
+    <div id="campaign-detail" class="create-panel hidden">
+      <div class="campaign-info">
+        <div class="campaign-name" id="detail-name"></div>
+        <div class="campaign-slug" id="detail-slug"></div>
+        <div class="campaign-stats" id="detail-stats"></div>
+      </div>
+    </div>
+    <div id="create-panel" class="create-panel hidden">
+      <div id="create-error" class="error hidden"></div>
+      <div id="create-success" class="success hidden"></div>
+      <label for="camp-slug">Slug</label>
+      <input type="text" id="camp-slug" placeholder="e.g. spring24">
+      <label for="camp-name">Name</label>
+      <input type="text" id="camp-name" placeholder="e.g. Spring 2024">
+      <label for="camp-url">Base URL</label>
+      <input type="text" id="camp-url" placeholder="e.g. https://theintrodb.org/sign-up">
+      <label for="camp-desc">Description</label>
+      <textarea id="camp-desc" placeholder="Optional description for the campaign page"></textarea>
+      <div class="btn-row">
+        <button id="create-btn">Create Campaign</button>
+        <button id="cancel-create-btn" class="danger">Cancel</button>
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -236,10 +254,19 @@ document.getElementById('admin-pwd').addEventListener('keydown', (e) => {
   else { showLoginForm(); }
 })();
 
+let selectedCampaignId = '';
+let campaignsMap = {};
+
 async function loadAll() {
+  await loadCampaigns();
   loadStats();
-  loadCampaigns();
 }
+
+document.getElementById('campaign-select').addEventListener('change', () => {
+  selectedCampaignId = document.getElementById('campaign-select').value;
+  renderCampaignDetail();
+  loadStats();
+});
 
 // Stats
 const PAGE_SIZE = 10;
@@ -273,7 +300,8 @@ document.getElementById('redemption-next').addEventListener('click', () => {
 
 async function loadStats() {
   try {
-    const res = await api('/api/admin/stats');
+    const url = selectedCampaignId ? '/api/admin/stats?campaign_id=' + encodeURIComponent(selectedCampaignId) : '/api/admin/stats';
+    const res = await api(url);
     if (!res.ok) return;
     const data = await res.json();
     document.getElementById('stat-campaigns').textContent = data.total_campaigns;
@@ -300,25 +328,45 @@ async function loadCampaigns() {
     const res = await api('/api/admin/campaigns');
     if (!res.ok) return;
     const data = await res.json();
-    const list = document.getElementById('campaign-list');
-    list.innerHTML = '';
-    if (!data.campaigns || data.campaigns.length === 0) {
-      list.innerHTML = '<div style="color: var(--muted);">No campaigns yet.</div>';
-      return;
+    
+    const select = document.getElementById('campaign-select');
+    select.innerHTML = '<option value="">All Campaigns</option>';
+    
+    campaignsMap = {};
+    for (const c of data.campaigns || []) {
+      campaignsMap[c.id] = c;
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.name;
+      select.appendChild(opt);
     }
-    for (const c of data.campaigns) {
-      const div = document.createElement('div');
-      div.className = 'campaign-row';
-      div.innerHTML = `
-        <div class="campaign-info">
-          <div class="campaign-name">${esc(c.name)}</div>
-          <div class="campaign-slug">/${esc(c.slug)} — ${esc(c.base_url)}</div>
-          <div class="campaign-stats">${c.codes_count} codes, ${c.redemptions} redemptions — created ${esc(c.created_at)}</div>
-        </div>`;
-      list.appendChild(div);
-    }
+    select.value = selectedCampaignId;
+    renderCampaignDetail();
   } catch {}
 }
+
+function renderCampaignDetail() {
+  const el = document.getElementById('campaign-detail');
+  if (!selectedCampaignId || !campaignsMap[selectedCampaignId]) {
+    el.classList.add('hidden');
+    return;
+  }
+  el.classList.remove('hidden');
+  const c = campaignsMap[selectedCampaignId];
+  document.getElementById('detail-name').textContent = c.name;
+  document.getElementById('detail-slug').textContent = '/' + c.slug + ' — ' + c.base_url;
+  document.getElementById('detail-stats').textContent = c.codes_count + ' codes, ' + c.redemptions + ' redemptions — created ' + c.created_at;
+}
+
+// Toggle create panel
+document.getElementById('new-campaign-btn').addEventListener('click', () => {
+  document.getElementById('create-panel').classList.toggle('hidden');
+});
+document.getElementById('cancel-create-btn').addEventListener('click', () => {
+  document.getElementById('create-panel').classList.add('hidden');
+  document.getElementById('create-error').classList.add('hidden');
+  document.getElementById('create-success').classList.add('hidden');
+});
 
 // Create campaign
 document.getElementById('create-btn').addEventListener('click', async () => {
@@ -350,8 +398,8 @@ document.getElementById('create-btn').addEventListener('click', async () => {
     document.getElementById('camp-name').value = '';
     document.getElementById('camp-url').value = '';
     document.getElementById('camp-desc').value = '';
-    succ.textContent = 'Campaign created successfully!';
-    succ.classList.remove('hidden');
+    document.getElementById('create-panel').classList.add('hidden');
+    succ.classList.add('hidden');
     loadCampaigns();
     loadStats();
   } catch {
