@@ -87,6 +87,9 @@
   .campaign-name { font-weight: 700; }
   .campaign-slug { font-size: 0.75rem; color: var(--muted); }
   .campaign-stats { font-size: 0.75rem; color: var(--muted); }
+  .pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; }
+  .pagination button:disabled { opacity: 0.4; cursor: default; }
+  .pagination span { font-size: 0.8125rem; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -130,19 +133,24 @@
   </div>
 
   <div class="card">
-    <h2>Recent Redemptions</h2>
-    <table>
-      <thead><tr><th>New User</th><th>Code</th><th>Owner</th><th>Campaign</th><th>Date</th></tr></thead>
-      <tbody id="redemptions-body"></tbody>
-    </table>
-  </div>
-
-  <div class="card">
     <h2>Top Referral Codes</h2>
     <table>
       <thead><tr><th>Code</th><th>Owner</th><th>Discord</th><th>Campaign</th><th>Redemptions</th></tr></thead>
       <tbody id="top-codes-body"></tbody>
     </table>
+  </div>
+
+  <div class="card">
+    <h2>Recent Redemptions</h2>
+    <table>
+      <thead><tr><th>New User</th><th>Code</th><th>Owner</th><th>Campaign</th><th>Date</th></tr></thead>
+      <tbody id="redemptions-body"></tbody>
+    </table>
+    <div id="redemption-pagination" class="pagination">
+      <button id="redemption-prev">← Prev</button>
+      <span id="redemption-page-info"></span>
+      <button id="redemption-next">Next →</button>
+    </div>
   </div>
 </div>
 
@@ -234,6 +242,35 @@ async function loadAll() {
 }
 
 // Stats
+const PAGE_SIZE = 10;
+let allRedemptions = [];
+let redemptionPage = 0;
+
+function renderRedemptionsPage() {
+  const rBody = document.getElementById('redemptions-body');
+  rBody.innerHTML = '';
+  const start = redemptionPage * PAGE_SIZE;
+  const page = allRedemptions.slice(start, start + PAGE_SIZE);
+  for (const r of page) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${esc(r.new_user_id)}</td><td>${esc(r.code)}</td><td>${esc(r.owner_email)}</td><td>${esc(r.campaign)}</td><td>${esc(r.created_at)}</td>`;
+    rBody.appendChild(tr);
+  }
+  const totalPages = Math.ceil(allRedemptions.length / PAGE_SIZE);
+  document.getElementById('redemption-page-info').textContent =
+    allRedemptions.length > 0 ? `${redemptionPage + 1} / ${totalPages}` : '';
+  document.getElementById('redemption-prev').disabled = redemptionPage === 0;
+  document.getElementById('redemption-next').disabled = redemptionPage >= totalPages - 1 || totalPages === 0;
+}
+
+document.getElementById('redemption-prev').addEventListener('click', () => {
+  if (redemptionPage > 0) { redemptionPage--; renderRedemptionsPage(); }
+});
+document.getElementById('redemption-next').addEventListener('click', () => {
+  const totalPages = Math.ceil(allRedemptions.length / PAGE_SIZE);
+  if (redemptionPage < totalPages - 1) { redemptionPage++; renderRedemptionsPage(); }
+});
+
 async function loadStats() {
   try {
     const res = await api('/api/admin/stats');
@@ -243,13 +280,9 @@ async function loadStats() {
     document.getElementById('stat-codes').textContent = data.total_codes;
     document.getElementById('stat-redemptions').textContent = data.total_redemptions;
 
-    const rBody = document.getElementById('redemptions-body');
-    rBody.innerHTML = '';
-    for (const r of (data.recent_redemptions || [])) {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${esc(r.new_user_id)}</td><td>${esc(r.code)}</td><td>${esc(r.owner_email)}</td><td>${esc(r.campaign)}</td><td>${esc(r.created_at)}</td>`;
-      rBody.appendChild(tr);
-    }
+    allRedemptions = data.recent_redemptions || [];
+    redemptionPage = 0;
+    renderRedemptionsPage();
 
     const tcBody = document.getElementById('top-codes-body');
     tcBody.innerHTML = '';
