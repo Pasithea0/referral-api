@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Referral System</title>
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --fg: #1a1a1a;
+    --muted: #666;
+    --border: #ccc;
+    --accent: #2a6e3f;
+    --card-bg: #fff;
+    --danger: #c62828;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #2a2a2a;
+      --fg: #f0f0e8;
+      --muted: #999;
+      --border: #444;
+      --accent: #4caf50;
+      --card-bg: #333;
+      --danger: #ef5350;
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.6;
+    padding: 2rem 1rem;
+    min-height: 100vh;
+  }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; }
+  h2 { font-size: 1.125rem; font-weight: 700; margin-bottom: 1rem; }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  label { display: block; margin-bottom: 0.25rem; font-size: 0.875rem; }
+  input, textarea {
+    font-family: inherit;
+    font-size: 0.875rem;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--fg);
+    width: 100%;
+    margin-bottom: 0.75rem;
+  }
+  textarea { resize: vertical; min-height: 3rem; }
+  button {
+    font-family: inherit;
+    font-size: 0.875rem;
+    padding: 0.5rem 1.5rem;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+  }
+  button:hover { opacity: 0.9; }
+  button.danger { border-color: var(--danger); background: var(--danger); }
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  .stat-card { background: var(--card-bg); border: 1px solid var(--border); padding: 1rem; text-align: center; }
+  .stat-number { font-size: 2rem; font-weight: 700; }
+  .stat-label { font-size: 0.75rem; color: var(--muted); margin-top: 0.25rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 400; }
+  .error { color: var(--danger); margin-bottom: 0.75rem; }
+  .success { color: var(--accent); margin-bottom: 0.75rem; }
+  .hidden { display: none; }
+  .overlay {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; align-items: center; justify-content: center; z-index: 100;
+  }
+  .overlay .card { width: 100%; max-width: 400px; }
+  .campaign-row { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+  .campaign-row:last-child { border-bottom: none; }
+  .campaign-info { flex: 1; }
+  .campaign-name { font-weight: 700; }
+  .campaign-slug { font-size: 0.75rem; color: var(--muted); }
+  .campaign-stats { font-size: 0.75rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="password-overlay" class="overlay">
+  <div class="card">
+    <h2>Admin Access</h2>
+    <label for="admin-pwd">Password</label>
+    <input type="password" id="admin-pwd" autocomplete="off">
+    <div id="login-error" class="error hidden"></div>
+    <button id="login-btn">Login</button>
+  </div>
+</div>
+
+<div id="main" class="container hidden">
+  <h1>Referral System — Admin</h1>
+
+  <div class="stat-grid">
+    <div class="stat-card"><div class="stat-number" id="stat-campaigns">-</div><div class="stat-label">Campaigns</div></div>
+    <div class="stat-card"><div class="stat-number" id="stat-codes">-</div><div class="stat-label">Referral Codes</div></div>
+    <div class="stat-card"><div class="stat-number" id="stat-redemptions">-</div><div class="stat-label">Redemptions</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Create Campaign</h2>
+    <div id="create-error" class="error hidden"></div>
+    <div id="create-success" class="success hidden"></div>
+    <label for="camp-slug">Slug</label>
+    <input type="text" id="camp-slug" placeholder="e.g. spring24">
+    <label for="camp-name">Name</label>
+    <input type="text" id="camp-name" placeholder="e.g. Spring 2024">
+    <label for="camp-url">Base URL</label>
+    <input type="text" id="camp-url" placeholder="e.g. https://theintrodb.org/sign-up">
+    <label for="camp-desc">Description</label>
+    <textarea id="camp-desc" placeholder="Optional description for the campaign page"></textarea>
+    <button id="create-btn">Create Campaign</button>
+  </div>
+
+  <div class="card">
+    <h2>Campaigns</h2>
+    <div id="campaign-list"></div>
+  </div>
+
+  <div class="card">
+    <h2>Recent Redemptions</h2>
+    <table>
+      <thead><tr><th>New User</th><th>Code</th><th>Owner</th><th>Campaign</th><th>Date</th></tr></thead>
+      <tbody id="redemptions-body"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Top Referral Codes</h2>
+    <table>
+      <thead><tr><th>Code</th><th>Owner</th><th>Discord</th><th>Campaign</th><th>Redemptions</th></tr></thead>
+      <tbody id="top-codes-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const PWD_KEY = 'admin_password';
+
+function getPassword() { return sessionStorage.getItem(PWD_KEY); }
+function setPassword(pwd) { sessionStorage.setItem(PWD_KEY, pwd); }
+
+async function api(path, opts = {}) {
+  const pwd = getPassword();
+  const res = await fetch(path, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Admin-Password': pwd,
+      ...(opts.headers || {}),
+    },
+  });
+  if (res.status === 401 || res.status === 403) {
+    sessionStorage.removeItem(PWD_KEY);
+    showLogin();
+    throw new Error('Unauthorized');
+  }
+  return res;
+}
+
+// Login
+function showLogin() {
+  document.getElementById('password-overlay').classList.remove('hidden');
+  document.getElementById('main').classList.add('hidden');
+  document.getElementById('admin-pwd').value = '';
+  document.getElementById('login-error').classList.add('hidden');
+}
+
+document.getElementById('login-btn').addEventListener('click', async () => {
+  const pwd = document.getElementById('admin-pwd').value;
+  if (!pwd) return;
+  setPassword(pwd);
+  try {
+    const res = await api('/api/admin/stats');
+    if (res.ok) {
+      document.getElementById('password-overlay').classList.add('hidden');
+      document.getElementById('main').classList.remove('hidden');
+      loadAll();
+    } else {
+      sessionStorage.removeItem(PWD_KEY);
+      document.getElementById('login-error').textContent = 'Invalid password';
+      document.getElementById('login-error').classList.remove('hidden');
+    }
+  } catch {
+    sessionStorage.removeItem(PWD_KEY);
+    document.getElementById('login-error').textContent = 'Connection error';
+    document.getElementById('login-error').classList.remove('hidden');
+  }
+});
+
+document.getElementById('admin-pwd').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('login-btn').click();
+});
+
+// Auto-login if password stored
+if (getPassword()) {
+  (async () => {
+    try {
+      const res = await api('/api/admin/stats');
+      if (res.ok) {
+        document.getElementById('password-overlay').classList.add('hidden');
+        document.getElementById('main').classList.remove('hidden');
+        loadAll();
+      } else {
+        showLogin();
+      }
+    } catch { showLogin(); }
+  })();
+}
+
+async function loadAll() {
+  loadStats();
+  loadCampaigns();
+}
+
+// Stats
+async function loadStats() {
+  try {
+    const res = await api('/api/admin/stats');
+    if (!res.ok) return;
+    const data = await res.json();
+    document.getElementById('stat-campaigns').textContent = data.total_campaigns;
+    document.getElementById('stat-codes').textContent = data.total_codes;
+    document.getElementById('stat-redemptions').textContent = data.total_redemptions;
+
+    const rBody = document.getElementById('redemptions-body');
+    rBody.innerHTML = '';
+    for (const r of (data.recent_redemptions || [])) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${esc(r.new_user_id)}</td><td>${esc(r.code)}</td><td>${esc(r.owner_email)}</td><td>${esc(r.campaign)}</td><td>${esc(r.created_at)}</td>`;
+      rBody.appendChild(tr);
+    }
+
+    const tcBody = document.getElementById('top-codes-body');
+    tcBody.innerHTML = '';
+    for (const t of (data.top_codes || [])) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${esc(t.code)}</td><td>${esc(t.owner_email)}</td><td>${esc(t.owner_discord)}</td><td>${esc(t.campaign)}</td><td>${t.redemptions}</td>`;
+      tcBody.appendChild(tr);
+    }
+  } catch {}
+}
+
+// Campaigns
+async function loadCampaigns() {
+  try {
+    const res = await api('/api/admin/campaigns');
+    if (!res.ok) return;
+    const data = await res.json();
+    const list = document.getElementById('campaign-list');
+    list.innerHTML = '';
+    if (!data.campaigns || data.campaigns.length === 0) {
+      list.innerHTML = '<div style="color: var(--muted);">No campaigns yet.</div>';
+      return;
+    }
+    for (const c of data.campaigns) {
+      const div = document.createElement('div');
+      div.className = 'campaign-row';
+      div.innerHTML = `
+        <div class="campaign-info">
+          <div class="campaign-name">${esc(c.name)}</div>
+          <div class="campaign-slug">/${esc(c.slug)} — ${esc(c.base_url)}</div>
+          <div class="campaign-stats">${c.codes_count} codes, ${c.redemptions} redemptions — created ${esc(c.created_at)}</div>
+        </div>`;
+      list.appendChild(div);
+    }
+  } catch {}
+}
+
+// Create campaign
+document.getElementById('create-btn').addEventListener('click', async () => {
+  const slug = document.getElementById('camp-slug').value.trim();
+  const name = document.getElementById('camp-name').value.trim();
+  const url = document.getElementById('camp-url').value.trim();
+  const desc = document.getElementById('camp-desc').value.trim();
+  const err = document.getElementById('create-error');
+  const succ = document.getElementById('create-success');
+  err.classList.add('hidden');
+  succ.classList.add('hidden');
+  if (!slug || !name || !url) {
+    err.textContent = 'Slug, name, and base URL are required';
+    err.classList.remove('hidden');
+    return;
+  }
+  try {
+    const res = await api('/api/admin/campaigns', {
+      method: 'POST',
+      body: JSON.stringify({ slug, name, base_url: url, description: desc }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      err.textContent = body.error || 'Failed to create campaign';
+      err.classList.remove('hidden');
+      return;
+    }
+    document.getElementById('camp-slug').value = '';
+    document.getElementById('camp-name').value = '';
+    document.getElementById('camp-url').value = '';
+    document.getElementById('camp-desc').value = '';
+    succ.textContent = 'Campaign created successfully!';
+    succ.classList.remove('hidden');
+    loadCampaigns();
+    loadStats();
+  } catch {
+    err.textContent = 'Network error';
+    err.classList.remove('hidden');
+  }
+});
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+</body>
+</html>

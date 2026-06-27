@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Referral Dashboard</title>
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --fg: #1a1a1a;
+    --muted: #666;
+    --border: #ccc;
+    --accent: #2a6e3f;
+    --card-bg: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #2a2a2a;
+      --fg: #f0f0e8;
+      --muted: #999;
+      --border: #444;
+      --accent: #4caf50;
+      --card-bg: #333;
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.6;
+    padding: 2rem 1rem;
+    min-height: 100vh;
+  }
+  .container { max-width: 600px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; }
+  input {
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--fg);
+    width: 100%;
+    margin-bottom: 0.75rem;
+  }
+  button {
+    font-family: inherit;
+    font-size: 0.875rem;
+    padding: 0.5rem 1.5rem;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+  }
+  button:hover { opacity: 0.9; }
+  .stat-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { color: var(--muted); }
+  .stat-value { font-weight: 700; }
+  .error { color: #c62828; margin-top: 0.5rem; }
+  .hidden { display: none; }
+  .share-link { word-break: break-all; color: var(--accent); margin-top: 0.5rem; display: block; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Referral Dashboard</h1>
+  <div class="card">
+    <label for="code">Enter your referral code</label>
+    <input type="text" id="code" placeholder="e.g. ABC123DEF4" maxlength="10" autocomplete="off">
+    <button id="lookup-btn">Look up</button>
+    <div id="error" class="error hidden"></div>
+  </div>
+  <div id="result" class="card hidden">
+    <div class="stat-row"><span class="stat-label">Code</span><span class="stat-value" id="r-code"></span></div>
+    <div class="stat-row"><span class="stat-label">Campaign</span><span class="stat-value" id="r-campaign"></span></div>
+    <div class="stat-row"><span class="stat-label">Email</span><span class="stat-value" id="r-email"></span></div>
+    <div class="stat-row"><span class="stat-label">Discord</span><span class="stat-value" id="r-discord"></span></div>
+    <div class="stat-row"><span class="stat-label">Redemptions</span><span class="stat-value" id="r-redemptions"></span></div>
+    <a id="r-share-link" class="share-link" target="_blank"></a>
+  </div>
+</div>
+<script>
+const codeInput = document.getElementById('code');
+const lookupBtn = document.getElementById('lookup-btn');
+const errorDiv = document.getElementById('error');
+const resultDiv = document.getElementById('result');
+
+function showError(msg) {
+  errorDiv.textContent = msg;
+  errorDiv.classList.remove('hidden');
+  resultDiv.classList.add('hidden');
+}
+
+function showResult(data) {
+  errorDiv.classList.add('hidden');
+  document.getElementById('r-code').textContent = data.code;
+  document.getElementById('r-campaign').textContent = data.campaign;
+  document.getElementById('r-email').textContent = data.owner_email;
+  document.getElementById('r-discord').textContent = data.owner_discord;
+  document.getElementById('r-redemptions').textContent = data.redemptions;
+  const link = document.getElementById('r-share-link');
+  link.textContent = data.share_link;
+  link.href = data.share_link;
+  resultDiv.classList.remove('hidden');
+}
+
+async function lookup() {
+  const code = codeInput.value.trim().toUpperCase();
+  if (!code) { showError('Please enter a referral code'); return; }
+  try {
+    const res = await fetch('/api/referral-codes/' + encodeURIComponent(code));
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showError(body.error || 'Code not found');
+      return;
+    }
+    const data = await res.json();
+    showResult(data);
+  } catch (e) {
+    showError('Network error. Please try again.');
+  }
+}
+
+lookupBtn.addEventListener('click', lookup);
+codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') lookup(); });
+codeInput.focus();
+</script>
+</body>
+</html>

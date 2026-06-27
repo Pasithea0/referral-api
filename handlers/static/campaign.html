@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{CAMPAIGN_NAME}} — Referral Campaign</title>
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --fg: #1a1a1a;
+    --muted: #666;
+    --border: #ccc;
+    --accent: #2a6e3f;
+    --card-bg: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #2a2a2a;
+      --fg: #f0f0e8;
+      --muted: #999;
+      --border: #444;
+      --accent: #4caf50;
+      --card-bg: #333;
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.6;
+    padding: 2rem 1rem;
+    min-height: 100vh;
+  }
+  .container { max-width: 520px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; }
+  p.description { color: var(--muted); margin-bottom: 1.5rem; font-size: 0.875rem; }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  label { display: block; margin-bottom: 0.25rem; font-size: 0.875rem; }
+  input {
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--fg);
+    width: 100%;
+    margin-bottom: 0.75rem;
+  }
+  button {
+    font-family: inherit;
+    font-size: 0.875rem;
+    padding: 0.5rem 1.5rem;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+  }
+  button:hover { opacity: 0.9; }
+  .error { color: #c62828; margin-bottom: 0.75rem; }
+  .hidden { display: none; }
+  .share-link { word-break: break-all; color: var(--accent); display: block; margin-top: 0.5rem; }
+  .code-display { font-size: 1.5rem; font-weight: 700; letter-spacing: 0.2em; text-align: center; padding: 1rem 0; }
+  .stat-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { color: var(--muted); }
+  .stat-value { font-weight: 700; }
+  .copy-btn { margin-left: 0.5rem; padding: 0.25rem 0.75rem; font-size: 0.75rem; }
+  .inline-group { display: flex; gap: 0.5rem; align-items: flex-start; }
+  .inline-group input { flex: 1; }
+  .inline-group button { white-space: nowrap; }
+</style>
+</head>
+<body data-slug="{{CAMPAIGN_SLUG}}">
+<div class="container">
+  <h1>{{CAMPAIGN_NAME}}</h1>
+  <p class="description">{{CAMPAIGN_DESCRIPTION}}</p>
+
+  <div id="referral-view" class="card hidden">
+    <div class="code-display" id="display-code"></div>
+    <div class="stat-row"><span class="stat-label">Redemptions</span><span class="stat-value" id="display-redemptions">0</span></div>
+    <div class="inline-group" style="margin-top: 1rem;">
+      <input type="text" id="display-link" readonly>
+      <button class="copy-btn" id="copy-btn">Copy</button>
+    </div>
+    <div id="copy-feedback" style="font-size: 0.75rem; color: var(--accent); margin-top: 0.25rem;"></div>
+  </div>
+
+  <div id="form-view" class="card">
+    <div id="form-error" class="error hidden"></div>
+    <label for="email">Email</label>
+    <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+    <label for="discord">Discord</label>
+    <input type="text" id="discord" placeholder="username#0000" autocomplete="off">
+    <button id="submit-btn">Get Your Referral Link</button>
+  </div>
+</div>
+
+<script>
+const SLUG = document.body.dataset.slug;
+const COOKIE_NAME = 'ref_' + SLUG;
+
+function getCookie(name) {
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+
+function setCookie(name, value, days) {
+  const d = new Date();
+  d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+  document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + d.toUTCString() + ';path=/';
+}
+
+async function fetchCodeStats(code) {
+  try {
+    const res = await fetch('/api/referral-codes/' + encodeURIComponent(code));
+    if (res.ok) return await res.json();
+  } catch {}
+  return null;
+}
+
+// Check cookie
+const existingCode = getCookie(COOKIE_NAME);
+if (existingCode) {
+  showReferralView(existingCode);
+} else {
+  document.getElementById('form-view').classList.remove('hidden');
+}
+
+async function showReferralView(code) {
+  document.getElementById('form-view').classList.add('hidden');
+  document.getElementById('referral-view').classList.remove('hidden');
+  document.getElementById('display-code').textContent = code;
+
+  const stats = await fetchCodeStats(code);
+  if (stats) {
+    document.getElementById('display-redemptions').textContent = stats.redemptions;
+    document.getElementById('display-link').value = stats.share_link;
+  } else {
+    document.getElementById('display-redemptions').textContent = '?';
+    document.getElementById('display-link').value = '?';
+  }
+}
+
+// Copy
+document.getElementById('copy-btn').addEventListener('click', () => {
+  const link = document.getElementById('display-link');
+  navigator.clipboard.writeText(link.value).then(() => {
+    const fb = document.getElementById('copy-feedback');
+    fb.textContent = 'Copied!';
+    setTimeout(() => { fb.textContent = ''; }, 2000);
+  });
+});
+
+// Form submit
+document.getElementById('submit-btn').addEventListener('click', async () => {
+  const email = document.getElementById('email').value.trim();
+  const discord = document.getElementById('discord').value.trim();
+  const err = document.getElementById('form-error');
+  err.classList.add('hidden');
+
+  if (!email || !discord) {
+    err.textContent = 'Both email and discord are required';
+    err.classList.remove('hidden');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/referral-codes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campaign_slug: SLUG, email, discord }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      err.textContent = body.error || 'Failed to generate code';
+      err.classList.remove('hidden');
+      return;
+    }
+
+    const data = await res.json();
+    setCookie(COOKIE_NAME, data.code, 365);
+    showReferralView(data.code);
+  } catch {
+    err.textContent = 'Network error. Please try again.';
+    err.classList.remove('hidden');
+  }
+});
+</script>
+</body>
+</html>
