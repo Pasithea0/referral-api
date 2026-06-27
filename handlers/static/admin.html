@@ -75,11 +75,11 @@
   th { color: var(--muted); font-weight: 400; }
   .error { color: var(--danger); margin-bottom: 0.75rem; }
   .success { color: var(--accent); margin-bottom: 0.75rem; }
-  .hidden { display: none; }
   .overlay {
     position: fixed; inset: 0; background: var(--bg);
     display: flex; align-items: center; justify-content: center; z-index: 100;
   }
+  .hidden { display: none; }
   .overlay .card { width: 100%; max-width: 400px; }
   .campaign-row { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
   .campaign-row:last-child { border-bottom: none; }
@@ -162,42 +162,55 @@ async function api(path, opts = {}) {
       ...(opts.headers || {}),
     },
   });
-  if (res.status === 401 || res.status === 403) {
-    sessionStorage.removeItem(PWD_KEY);
-    showLogin();
-    throw new Error('Unauthorized');
-  }
   return res;
 }
 
-// Login
-function showLogin() {
+function showDashboard() {
+  document.getElementById('password-overlay').classList.add('hidden');
+  document.getElementById('main').classList.remove('hidden');
+  loadAll();
+}
+
+function showLoginForm() {
   document.getElementById('password-overlay').classList.remove('hidden');
   document.getElementById('main').classList.add('hidden');
   document.getElementById('admin-pwd').value = '';
   document.getElementById('login-error').classList.add('hidden');
 }
 
+function showLoginError(msg) {
+  document.getElementById('login-error').textContent = msg;
+  document.getElementById('login-error').classList.remove('hidden');
+}
+
+async function attemptLogin(pwd) {
+  setPassword(pwd);
+  let res;
+  try {
+    res = await api('/api/admin/stats');
+  } catch {
+    sessionStorage.removeItem(PWD_KEY);
+    showLoginError('Cannot reach server.');
+    return false;
+  }
+  if (res.ok) {
+    showDashboard();
+    return true;
+  }
+  sessionStorage.removeItem(PWD_KEY);
+  if (res.status === 401 || res.status === 403) {
+    showLoginError('Invalid admin password.');
+  } else {
+    showLoginError('Server error (HTTP ' + res.status + ').');
+  }
+  return false;
+}
+
 document.getElementById('login-btn').addEventListener('click', async () => {
   const pwd = document.getElementById('admin-pwd').value;
   if (!pwd) return;
-  setPassword(pwd);
-  try {
-    const res = await api('/api/admin/stats');
-    if (res.ok) {
-      document.getElementById('password-overlay').classList.add('hidden');
-      document.getElementById('main').classList.remove('hidden');
-      loadAll();
-    } else {
-      sessionStorage.removeItem(PWD_KEY);
-      document.getElementById('login-error').textContent = 'Invalid password';
-      document.getElementById('login-error').classList.remove('hidden');
-    }
-  } catch {
-    sessionStorage.removeItem(PWD_KEY);
-    document.getElementById('login-error').textContent = 'Connection error';
-    document.getElementById('login-error').classList.remove('hidden');
-  }
+  document.getElementById('login-error').classList.add('hidden');
+  attemptLogin(pwd);
 });
 
 document.getElementById('admin-pwd').addEventListener('keydown', (e) => {
@@ -205,20 +218,15 @@ document.getElementById('admin-pwd').addEventListener('keydown', (e) => {
 });
 
 // Auto-login if password stored
-if (getPassword()) {
-  (async () => {
-    try {
-      const res = await api('/api/admin/stats');
-      if (res.ok) {
-        document.getElementById('password-overlay').classList.add('hidden');
-        document.getElementById('main').classList.remove('hidden');
-        loadAll();
-      } else {
-        showLogin();
-      }
-    } catch { showLogin(); }
-  })();
-}
+(async function autoLogin() {
+  const pwd = getPassword();
+  if (!pwd) return;
+  let res;
+  try { res = await api('/api/admin/stats'); }
+  catch { showLoginForm(); return; }
+  if (res.ok) { showDashboard(); }
+  else { showLoginForm(); }
+})();
 
 async function loadAll() {
   loadStats();
